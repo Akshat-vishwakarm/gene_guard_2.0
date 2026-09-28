@@ -16,8 +16,15 @@ import {
   Shield,
   HelpCircle,
   Activity,
-  Edit2
+  Edit2,
+  Lock,
+  Unlock,
+  CheckCircle2,
+  AlertTriangle,
+  Sparkles,
+  ArrowRight
 } from 'lucide-react';
+import { evaluateAnalysisUnlockCriteria, DISEASE_MODULE_NAMES } from '../utils/analysisUnlockCriteria';
 
 // Specialized SVG Icons matching the reference image
 const MaleIcon = ({ size = 28, color = '#3B82F6' }) => (
@@ -92,6 +99,25 @@ export const isMaleRelative = (member) => {
   if (sex === 'female' || sex === 'f') return false;
   const rel = (member.relationship || '').toLowerCase();
   return ['father', 'brother', 'grandfather', 'paternal grandfather', 'maternal grandfather', 'son', 'uncle', 'nephew'].some((r) => rel.includes(r));
+};
+
+// Helper: Determine biological sex strictly based on pedigree relationship (No manual gender input)
+export const getGenderForRelationship = (relationship) => {
+  const rel = (relationship || '').toLowerCase();
+  const maleKeywords = [
+    'father',
+    'brother',
+    'paternal grandfather',
+    'maternal grandfather',
+    'grandfather',
+    'son',
+    'uncle',
+    'nephew'
+  ];
+  if (maleKeywords.some((k) => rel === k || rel.includes(k))) {
+    return 'Male';
+  }
+  return 'Female';
 };
 
 // Canonical Gender-Partitioned Positions
@@ -187,16 +213,28 @@ const NODE_THEMES = {
 
 export default function FamilyNetworkCanvas({
   selfData,
-  familyMembers,
+  familyMembers = [],
   setFamilyMembers,
   onBackToInput,
   onGenerateFinalAnalysis,
-  onOpenReportUpload
+  onOpenReportUpload,
+  patientProfile,
+  formValues = {},
+  predictionResults = {}
 }) {
   const containerRef = useRef(null);
   const [selectedNodeId, setSelectedNodeId] = useState('me');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [showCriteriaModal, setShowCriteriaModal] = useState(false);
+
+  // Evaluate the 3 Unlocking Criteria
+  const unlockCriteria = evaluateAnalysisUnlockCriteria(
+    patientProfile || selfData,
+    formValues || selfData?.module_inputs || {},
+    predictionResults || {},
+    familyMembers
+  );
 
   // Pan & Zoom state
   const [scale, setScale] = useState(1);
@@ -363,12 +401,21 @@ export default function FamilyNetworkCanvas({
     setIsDrawerOpen(true);
   };
 
+  // Single-parent validation: track existing Father and Mother
+  const existingFather = familyMembers.find((m) => (m.relationship || '').toLowerCase() === 'father');
+  const existingMother = familyMembers.find((m) => (m.relationship || '').toLowerCase() === 'mother');
+  const hasFather = Boolean(existingFather);
+  const hasMother = Boolean(existingMother);
+
+  const [addModalError, setAddModalError] = useState(null);
+
   // Initial Add Family Member Form State: All conditions default strictly to UNKNOWN (null)
+  const initialDefaultRel = !hasFather ? 'Father' : (!hasMother ? 'Mother' : 'Brother');
   const INITIAL_NEW_MEMBER_FORM = {
-    relationship: 'Father',
+    relationship: initialDefaultRel,
     name: '',
     age: '',
-    sex: 'Male',
+    sex: getGenderForRelationship(initialDefaultRel),
     family_conditions: {
       diabetes: null,
       hypertension: null,
@@ -379,14 +426,47 @@ export default function FamilyNetworkCanvas({
   };
 
   const [newMemberForm, setNewMemberForm] = useState(INITIAL_NEW_MEMBER_FORM);
-  const isNewMemberMale = newMemberForm.sex === 'Male';
+  const derivedSex = getGenderForRelationship(newMemberForm.relationship);
+  const isNewMemberMale = derivedSex === 'Male';
+
+  const handleOpenAddModal = () => {
+    setAddModalError(null);
+    const initialRel = !hasFather ? 'Father' : (!hasMother ? 'Mother' : 'Brother');
+    setNewMemberForm({
+      relationship: initialRel,
+      name: '',
+      age: '',
+      sex: getGenderForRelationship(initialRel),
+      family_conditions: {
+        diabetes: null,
+        hypertension: null,
+        cardiovascular: null,
+        thyroid: null,
+        cancer: null
+      }
+    });
+    setIsAddModalOpen(true);
+  };
 
   // Smart Coordinate Generator: Strictly places Males in Upper Tier and Females in Lower Tier
   const handleAddMemberSubmit = (e) => {
     e.preventDefault();
+    const rel = (newMemberForm.relationship || '').toLowerCase();
+
+    // STRICT VALIDATION: Duplicate Father / Mother Error
+    if (rel === 'father' && hasFather) {
+      setAddModalError(`A biological Father node (${existingFather.name || 'Father'}) already exists in your family tree. You cannot add a second Father.`);
+      return;
+    }
+    if (rel === 'mother' && hasMother) {
+      setAddModalError(`A biological Mother node (${existingMother.name || 'Mother'}) already exists in your family tree. You cannot add a second Mother.`);
+      return;
+    }
+
     const id = `member_${Date.now()}`;
     const displayName = newMemberForm.name.trim() || newMemberForm.relationship;
-    const isMale = newMemberForm.sex === 'Male';
+    const sex = getGenderForRelationship(newMemberForm.relationship);
+    const isMale = sex === 'Male';
 
     const activeConditions = CORE_FAMILY_CONDITIONS
       .filter((c) => newMemberForm.family_conditions[c.key] === 1)
@@ -396,7 +476,7 @@ export default function FamilyNetworkCanvas({
       person_id: id,
       name: displayName,
       relationship: newMemberForm.relationship,
-      sex: newMemberForm.sex,
+      sex: sex,
       age: newMemberForm.age ? parseInt(newMemberForm.age) : null,
       conditions: activeConditions,
       family_conditions: { ...newMemberForm.family_conditions },
@@ -407,8 +487,6 @@ export default function FamilyNetworkCanvas({
     const mePos = getPos('me');
     let newX = mePos.x + 280;
     let newY = 140;
-
-    const rel = newMemberForm.relationship.toLowerCase();
 
     if (isMale) {
       // UPPER TIER: y strictly between 80 and 200
@@ -757,8 +835,9 @@ export default function FamilyNetworkCanvas({
           </div>
 
           <button
+            id="guide-add-family-btn"
             className="btn btn-secondary"
-            onClick={() => setIsAddModalOpen(true)}
+            onClick={handleOpenAddModal}
             style={{ 
               background: 'rgba(0, 0, 0, 0.35)', 
               border: '1px solid rgba(255, 255, 255, 0.08)', 
@@ -818,34 +897,78 @@ export default function FamilyNetworkCanvas({
             </button>
           </div>
 
-          {/* HIGH VISIBILITY PRIMARY CTA */}
+          {/* UNLOCK PREREQUISITES BADGE (When locked) */}
+          {!unlockCriteria.isUnlocked && (
+            <button
+              type="button"
+              onClick={() => setShowCriteriaModal(true)}
+              style={{
+                background: 'rgba(245, 158, 11, 0.12)',
+                border: '1px solid rgba(245, 158, 11, 0.35)',
+                borderRadius: 'var(--radius-md)',
+                padding: '7px 12px',
+                color: '#FBBF24',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                transition: 'all 0.15s ease'
+              }}
+              title="Click to view requirements to unlock Final Analysis"
+            >
+              <Lock size={13} color="#F59E0B" />
+              <span>Criteria: {unlockCriteria.criteriaMetCount}/3 Met</span>
+            </button>
+          )}
+
+          {/* HIGH VISIBILITY PRIMARY CTA / UNLOCKED ACTION */}
           <button
-            onClick={onGenerateFinalAnalysis}
+            id="guide-final-analysis-btn"
+            onClick={() => {
+              if (unlockCriteria.isUnlocked) {
+                onGenerateFinalAnalysis();
+              } else {
+                setShowCriteriaModal(true);
+              }
+            }}
             style={{
               padding: '9px 20px',
               borderRadius: 'var(--radius-md)',
-              background: '#FFFFFF',
-              color: '#000000',
+              background: unlockCriteria.isUnlocked ? '#FFFFFF' : 'rgba(255, 255, 255, 0.05)',
+              color: unlockCriteria.isUnlocked ? '#000000' : '#888888',
               fontWeight: 600,
               fontSize: '0.86rem',
-              border: 'none',
-              cursor: 'pointer',
+              border: unlockCriteria.isUnlocked ? 'none' : '1px solid rgba(255, 255, 255, 0.12)',
+              cursor: unlockCriteria.isUnlocked ? 'pointer' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              boxShadow: 'none',
-              transition: 'opacity 0.15s ease'
+              boxShadow: unlockCriteria.isUnlocked ? '0 0 20px rgba(56, 189, 248, 0.35)' : 'none',
+              transition: 'all 0.2s ease',
+              opacity: unlockCriteria.isUnlocked ? 1 : 0.75
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.opacity = '0.9';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.opacity = '1';
-            }}
+            title={
+              unlockCriteria.isUnlocked
+                ? 'Generate Final Multi-Organ & Pedigree Intelligence Report'
+                : 'Locked: Complete Profile, 5 Disease Models, and add at least 2 family members to unlock'
+            }
           >
-            <Dna size={16} />
-            <span>Generate Final Analysis</span>
-            <ChevronRight size={16} />
+            {unlockCriteria.isUnlocked ? (
+              <>
+                <Dna size={16} />
+                <span>Generate Final Analysis</span>
+                <ChevronRight size={16} />
+              </>
+            ) : (
+              <>
+                <Lock size={15} color="#F59E0B" />
+                <span>Analysis Locked ({unlockCriteria.criteriaMetCount}/3)</span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -1251,16 +1374,24 @@ export default function FamilyNetworkCanvas({
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Biological Sex</label>
-                    <select
-                      className="form-control"
-                      style={{ backgroundColor: '#0A0A0A', color: '#FFFFFF', colorScheme: 'dark' }}
-                      value={selectedNode.sex || 'Male'}
-                      onChange={(e) => handleUpdateMember({ ...selectedNode, sex: e.target.value })}
+                    <label className="form-label">Biological Sex (Auto-assigned)</label>
+                    <div
+                      style={{
+                        height: '42px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '0 12px',
+                        borderRadius: 'var(--radius-md)',
+                        background: (selectedNode.sex || 'Male') === 'Male' ? 'rgba(56, 189, 248, 0.08)' : 'rgba(236, 72, 153, 0.08)',
+                        border: `1px solid ${(selectedNode.sex || 'Male') === 'Male' ? 'rgba(56, 189, 248, 0.3)' : 'rgba(236, 72, 153, 0.3)'}`,
+                        color: (selectedNode.sex || 'Male') === 'Male' ? '#38BDF8' : '#F472B6',
+                        fontSize: '0.84rem',
+                        fontWeight: 600,
+                        gap: '6px'
+                      }}
                     >
-                      <option value="Male" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Male (Upper Tier)</option>
-                      <option value="Female" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Female (Lower Tier)</option>
-                    </select>
+                      <span>{(selectedNode.sex || 'Male') === 'Male' ? '♂ Male (Upper Tier)' : '♀ Female (Lower Tier)'}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -1545,6 +1676,41 @@ export default function FamilyNetworkCanvas({
             </div>
 
             <form onSubmit={handleAddMemberSubmit}>
+              {/* DUPLICATE PARENT ERROR BANNER */}
+              {((newMemberForm.relationship.toLowerCase() === 'father' && hasFather) ||
+                (newMemberForm.relationship.toLowerCase() === 'mother' && hasMother) ||
+                addModalError) && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px',
+                    padding: '12px 14px',
+                    borderRadius: '8px',
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid rgba(239, 68, 68, 0.4)',
+                    color: '#FCA5A5',
+                    fontSize: '0.84rem',
+                    marginBottom: '16px',
+                    fontWeight: 500,
+                    lineHeight: 1.4
+                  }}
+                >
+                  <AlertCircle size={18} color="#EF4444" style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <strong style={{ display: 'block', color: '#EF4444', marginBottom: '2px', fontSize: '0.86rem' }}>
+                      Single-Parent Lineage Rule
+                    </strong>
+                    <span>
+                      {addModalError ||
+                        (newMemberForm.relationship.toLowerCase() === 'father'
+                          ? `A biological Father node (${existingFather.name || 'Father'}) already exists in your family tree. Only 1 Father can be added.`
+                          : `A biological Mother node (${existingMother.name || 'Mother'}) already exists in your family tree. Only 1 Mother can be added.`)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div className="form-group">
                 <label className="form-label">Relationship to Me</label>
                 <select
@@ -1553,10 +1719,8 @@ export default function FamilyNetworkCanvas({
                   value={newMemberForm.relationship}
                   onChange={(e) => {
                     const rel = e.target.value;
-                    let defSex = 'Female';
-                    if (['Father', 'Brother', 'Paternal Grandfather', 'Maternal Grandfather', 'Son', 'Uncle'].includes(rel)) {
-                      defSex = 'Male';
-                    }
+                    setAddModalError(null);
+                    const defSex = getGenderForRelationship(rel);
                     setNewMemberForm((prev) => ({
                       ...prev,
                       relationship: rel,
@@ -1564,21 +1728,34 @@ export default function FamilyNetworkCanvas({
                     }));
                   }}
                 >
-                  <option value="Father" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Father &rarr; Upper Tier (Male ♂)</option>
-                  <option value="Mother" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Mother &rarr; Lower Tier (Female ♀)</option>
-                  <option value="Brother" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Brother &rarr; Upper Tier (Male ♂)</option>
-                  <option value="Sister" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Sister &rarr; Lower Tier (Female ♀)</option>
-                  <option value="Paternal Grandfather" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Paternal Grandfather &rarr; Upper Tier (Male ♂)</option>
-                  <option value="Paternal Grandmother" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Paternal Grandmother &rarr; Lower Tier (Female ♀)</option>
-                  <option value="Maternal Grandfather" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Maternal Grandfather &rarr; Upper Tier (Male ♂)</option>
-                  <option value="Maternal Grandmother" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Maternal Grandmother &rarr; Lower Tier (Female ♀)</option>
-                  <option value="Son" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Son &rarr; Upper Tier (Male ♂)</option>
-                  <option value="Daughter" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Daughter &rarr; Lower Tier (Female ♀)</option>
-                  <option value="Uncle" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Uncle (Blood) &rarr; Upper Tier (Male ♂)</option>
-                  <option value="Aunt" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Aunt (Blood) &rarr; Lower Tier (Female ♀)</option>
+                  <option
+                    value="Father"
+                    disabled={hasFather}
+                    style={{ backgroundColor: '#0D0D0D', color: hasFather ? '#666666' : '#FFFFFF' }}
+                  >
+                    Father {hasFather ? '⚠️ (Already Added — Only 1 Father Allowed)' : '→ Upper Tier (Male ♂)'}
+                  </option>
+                  <option
+                    value="Mother"
+                    disabled={hasMother}
+                    style={{ backgroundColor: '#0D0D0D', color: hasMother ? '#666666' : '#FFFFFF' }}
+                  >
+                    Mother {hasMother ? '⚠️ (Already Added — Only 1 Mother Allowed)' : '→ Lower Tier (Female ♀)'}
+                  </option>
+                  <option value="Brother" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Brother → Upper Tier (Male ♂)</option>
+                  <option value="Sister" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Sister → Lower Tier (Female ♀)</option>
+                  <option value="Paternal Grandfather" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Paternal Grandfather → Upper Tier (Male ♂)</option>
+                  <option value="Paternal Grandmother" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Paternal Grandmother → Lower Tier (Female ♀)</option>
+                  <option value="Maternal Grandfather" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Maternal Grandfather → Upper Tier (Male ♂)</option>
+                  <option value="Maternal Grandmother" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Maternal Grandmother → Lower Tier (Female ♀)</option>
+                  <option value="Son" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Son → Upper Tier (Male ♂)</option>
+                  <option value="Daughter" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Daughter → Lower Tier (Female ♀)</option>
+                  <option value="Uncle" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Uncle (Blood) → Upper Tier (Male ♂)</option>
+                  <option value="Aunt" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Aunt (Blood) → Lower Tier (Female ♀)</option>
                 </select>
               </div>
 
+              {/* Name & Age in grid-2 (Gender input removed, auto-derived from relationship) */}
               <div className="grid-2">
                 <div className="form-group">
                   <label className="form-label">Name / Nickname (Optional)</label>
@@ -1592,28 +1769,17 @@ export default function FamilyNetworkCanvas({
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Biological Sex</label>
-                  <select
+                  <label className="form-label">Age (Optional)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="125"
                     className="form-control"
-                    style={{ backgroundColor: '#0A0A0A', color: '#FFFFFF', colorScheme: 'dark' }}
-                    value={newMemberForm.sex}
-                    onChange={(e) => setNewMemberForm({ ...newMemberForm, sex: e.target.value })}
-                  >
-                    <option value="Male" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Male &rarr; Upper Node ♂</option>
-                    <option value="Female" style={{ backgroundColor: '#0D0D0D', color: '#FFFFFF' }}>Female &rarr; Lower Node ♀</option>
-                  </select>
+                    placeholder="e.g. 48"
+                    value={newMemberForm.age}
+                    onChange={(e) => setNewMemberForm({ ...newMemberForm, age: e.target.value })}
+                  />
                 </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Age (Optional)</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  placeholder="e.g. 48"
-                  value={newMemberForm.age}
-                  onChange={(e) => setNewMemberForm({ ...newMemberForm, age: e.target.value })}
-                />
               </div>
 
               {/* Known Conditions: Default strictly UNKNOWN (null) */}
@@ -1726,12 +1892,350 @@ export default function FamilyNetworkCanvas({
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  style={{ background: '#FFFFFF', color: '#000000', border: 'none', fontWeight: 600 }}
+                  disabled={
+                    (newMemberForm.relationship.toLowerCase() === 'father' && hasFather) ||
+                    (newMemberForm.relationship.toLowerCase() === 'mother' && hasMother)
+                  }
+                  style={{
+                    background:
+                      (newMemberForm.relationship.toLowerCase() === 'father' && hasFather) ||
+                      (newMemberForm.relationship.toLowerCase() === 'mother' && hasMother)
+                        ? 'rgba(255, 255, 255, 0.1)'
+                        : '#FFFFFF',
+                    color:
+                      (newMemberForm.relationship.toLowerCase() === 'father' && hasFather) ||
+                      (newMemberForm.relationship.toLowerCase() === 'mother' && hasMother)
+                        ? '#666666'
+                        : '#000000',
+                    border: 'none',
+                    fontWeight: 600,
+                    cursor:
+                      (newMemberForm.relationship.toLowerCase() === 'father' && hasFather) ||
+                      (newMemberForm.relationship.toLowerCase() === 'mother' && hasMother)
+                        ? 'not-allowed'
+                        : 'pointer',
+                    opacity:
+                      (newMemberForm.relationship.toLowerCase() === 'father' && hasFather) ||
+                      (newMemberForm.relationship.toLowerCase() === 'mother' && hasMother)
+                        ? 0.5
+                        : 1
+                  }}
                 >
-                  {isNewMemberMale ? 'Add to Upper Tier ♂' : 'Add to Lower Tier ♀'}
+                  {(newMemberForm.relationship.toLowerCase() === 'father' && hasFather) ||
+                  (newMemberForm.relationship.toLowerCase() === 'mother' && hasMother)
+                    ? 'Cannot Add Duplicate Parent'
+                    : isNewMemberMale
+                    ? 'Add to Upper Tier ♂'
+                    : 'Add to Lower Tier ♀'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* FINAL ANALYSIS PREREQUISITES MODAL (Shown when locked) */}
+      {showCriteriaModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.78)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10002,
+            padding: '20px'
+          }}
+          onClick={() => setShowCriteriaModal(false)}
+        >
+          <div
+            className="card"
+            style={{
+              maxWidth: '540px',
+              width: '100%',
+              background: 'rgba(10, 14, 22, 0.94)',
+              border: '1px solid rgba(245, 158, 11, 0.35)',
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8), 0 0 25px rgba(245, 158, 11, 0.15)',
+              borderRadius: '16px',
+              padding: '24px 26px',
+              animation: 'fadeIn 0.2s ease',
+              maxHeight: '90vh',
+              overflowY: 'auto'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* MODAL HEADER */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div
+                  style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '10px',
+                    background: 'rgba(245, 158, 11, 0.15)',
+                    border: '1px solid rgba(245, 158, 11, 0.35)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#F59E0B'
+                  }}
+                >
+                  <Lock size={20} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#FFFFFF', margin: 0 }}>
+                    Final Analysis Prerequisites
+                  </h3>
+                  <p style={{ fontSize: '0.8rem', color: '#94A3B8', margin: '4px 0 0 0' }}>
+                    Complete all 3 clinical requirements to unlock unified multi-organ synthesis:
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowCriteriaModal(false)}
+                style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: '4px' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* CRITERIA LIST */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '22px' }}>
+              {/* CRITERIA 1: PATIENT PROFILE */}
+              <div
+                style={{
+                  background: unlockCriteria.isProfileComplete ? 'rgba(16, 185, 129, 0.08)' : 'rgba(245, 158, 11, 0.08)',
+                  border: `1px solid ${unlockCriteria.isProfileComplete ? 'rgba(52, 211, 153, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                  borderRadius: '10px',
+                  padding: '12px 14px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#FFFFFF' }}>
+                      1. Patient Biological Profile
+                    </span>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      background: unlockCriteria.isProfileComplete ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                      color: unlockCriteria.isProfileComplete ? '#34D399' : '#FBBF24',
+                      border: `1px solid ${unlockCriteria.isProfileComplete ? 'rgba(52, 211, 153, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    {unlockCriteria.isProfileComplete ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
+                    {unlockCriteria.isProfileComplete ? 'Complete' : 'Incomplete'}
+                  </span>
+                </div>
+                <p style={{ fontSize: '0.78rem', color: '#94A3B8', margin: 0, lineHeight: 1.4 }}>
+                  Requires full baseline biometrics: Name, Age, Sex, Height, and Weight.
+                </p>
+                {!unlockCriteria.isProfileComplete && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCriteriaModal(false);
+                      onBackToInput();
+                    }}
+                    style={{
+                      marginTop: '8px',
+                      background: 'rgba(245, 158, 11, 0.15)',
+                      border: '1px solid rgba(245, 158, 11, 0.35)',
+                      color: '#FBBF24',
+                      fontSize: '0.76rem',
+                      fontWeight: 600,
+                      padding: '5px 10px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}
+                  >
+                    <span>Configure Profile</span>
+                    <ArrowRight size={12} />
+                  </button>
+                )}
+              </div>
+
+              {/* CRITERIA 2: ALL 5 DISEASE MODELS */}
+              <div
+                style={{
+                  background: unlockCriteria.isAllDiseasesComplete ? 'rgba(16, 185, 129, 0.08)' : 'rgba(245, 158, 11, 0.08)',
+                  border: `1px solid ${unlockCriteria.isAllDiseasesComplete ? 'rgba(52, 211, 153, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                  borderRadius: '10px',
+                  padding: '12px 14px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#FFFFFF' }}>
+                      2. Input All 5 Disease Models ({unlockCriteria.completedDiseasesCount}/5)
+                    </span>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      background: unlockCriteria.isAllDiseasesComplete ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                      color: unlockCriteria.isAllDiseasesComplete ? '#34D399' : '#FBBF24',
+                      border: `1px solid ${unlockCriteria.isAllDiseasesComplete ? 'rgba(52, 211, 153, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    {unlockCriteria.isAllDiseasesComplete ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
+                    {unlockCriteria.isAllDiseasesComplete ? 'All 5 Complete' : `${unlockCriteria.completedDiseasesCount}/5 Input`}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px', marginBottom: '8px' }}>
+                  {['cardiovascular', 'metabolic', 'blood_pressure', 'thyroid', 'cancer'].map((mod) => {
+                    const isDone = unlockCriteria.diseaseStatus[mod];
+                    return (
+                      <span
+                        key={mod}
+                        style={{
+                          fontSize: '0.7rem',
+                          padding: '2px 7px',
+                          borderRadius: '4px',
+                          background: isDone ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                          color: isDone ? '#34D399' : '#94A3B8',
+                          border: `1px solid ${isDone ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255, 255, 255, 0.1)'}`,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px'
+                        }}
+                      >
+                        {isDone ? '✓' : '•'} {DISEASE_MODULE_NAMES[mod] || mod}
+                      </span>
+                    );
+                  })}
+                </div>
+                {!unlockCriteria.isAllDiseasesComplete && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCriteriaModal(false);
+                      onBackToInput();
+                    }}
+                    style={{
+                      background: 'rgba(245, 158, 11, 0.15)',
+                      border: '1px solid rgba(245, 158, 11, 0.35)',
+                      color: '#FBBF24',
+                      fontSize: '0.76rem',
+                      fontWeight: 600,
+                      padding: '5px 10px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}
+                  >
+                    <span>Fill Disease Inputs</span>
+                    <ArrowRight size={12} />
+                  </button>
+                )}
+              </div>
+
+              {/* CRITERIA 3: AT LEAST 2 NODES IN FAMILY TREE */}
+              <div
+                style={{
+                  background: unlockCriteria.isFamilyNodesComplete ? 'rgba(16, 185, 129, 0.08)' : 'rgba(245, 158, 11, 0.08)',
+                  border: `1px solid ${unlockCriteria.isFamilyNodesComplete ? 'rgba(52, 211, 153, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                  borderRadius: '10px',
+                  padding: '12px 14px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#FFFFFF' }}>
+                      3. Family Tree Nodes ({unlockCriteria.familyCount}/2 minimum)
+                    </span>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      background: unlockCriteria.isFamilyNodesComplete ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                      color: unlockCriteria.isFamilyNodesComplete ? '#34D399' : '#FBBF24',
+                      border: `1px solid ${unlockCriteria.isFamilyNodesComplete ? 'rgba(52, 211, 153, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    {unlockCriteria.isFamilyNodesComplete ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
+                    {unlockCriteria.isFamilyNodesComplete ? '2+ Members Added' : `${unlockCriteria.familyCount}/2 Members`}
+                  </span>
+                </div>
+                <p style={{ fontSize: '0.78rem', color: '#94A3B8', margin: 0, lineHeight: 1.4 }}>
+                  Add at least 2 family members to the pedigree canvas to enable genetic risk transmission weighting.
+                </p>
+                {!unlockCriteria.isFamilyNodesComplete && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCriteriaModal(false);
+                      handleOpenAddModal();
+                    }}
+                    style={{
+                      marginTop: '8px',
+                      background: 'rgba(56, 189, 248, 0.15)',
+                      border: '1px solid rgba(56, 189, 248, 0.35)',
+                      color: '#38BDF8',
+                      fontSize: '0.76rem',
+                      fontWeight: 600,
+                      padding: '5px 10px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}
+                  >
+                    <Plus size={12} />
+                    <span>Add Member Node</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* MODAL FOOTER */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '14px', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+              <span style={{ fontSize: '0.8rem', color: unlockCriteria.isUnlocked ? '#34D399' : '#FBBF24', fontWeight: 600 }}>
+                {unlockCriteria.isUnlocked
+                  ? 'All 3 criteria satisfied! Analysis is unlocked.'
+                  : `${unlockCriteria.criteriaMetCount} of 3 criteria met.`}
+              </span>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowCriteriaModal(false)}
+                style={{ padding: '7px 16px', fontSize: '0.82rem' }}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

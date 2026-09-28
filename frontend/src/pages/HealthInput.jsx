@@ -118,6 +118,7 @@ export default function HealthInput({
           {/* Fill Normal / Demo Values Button */}
           {onFillNormalValues && (
             <button
+              id="guide-autofill-btn"
               type="button"
               className="btn btn-secondary"
               onClick={() => handleFillNormalWithToast(activeModule)}
@@ -164,6 +165,7 @@ export default function HealthInput({
           {/* Universal Upload Lab Report Button */}
           {onOpenUploadModal && (
             <button
+              id="guide-upload-btn"
               type="button"
               className="btn btn-outline"
               onClick={() => onOpenUploadModal(activeModule)}
@@ -186,6 +188,7 @@ export default function HealthInput({
 
           {/* Run All 5 Disease Models Button */}
           <button
+            id="guide-run-predictions-btn"
             className="btn btn-primary"
             onClick={onRunAllPredictions}
             style={{

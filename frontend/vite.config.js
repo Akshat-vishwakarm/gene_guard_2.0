@@ -15,14 +15,14 @@ export default defineConfig({
         target: 'http://127.0.0.1:8080',
         changeOrigin: true
       },
-      // Proxy jQuery AJAX chat submission from original medical app
+      // Proxy jQuery AJAX chat submission from original medical app to backend
       '/get': {
-        target: 'http://127.0.0.1:8080',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true
       },
-      // Proxy JSON chat API
+      // Proxy JSON chat API to backend
       '/api/chat': {
-        target: 'http://127.0.0.1:8080',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true
       },
       // Proxy chatbot static assets (style.css, etc.)

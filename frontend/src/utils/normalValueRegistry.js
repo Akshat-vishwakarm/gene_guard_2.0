@@ -239,3 +239,69 @@ export const MODEL_FEATURE_REGISTRY = {
     dia_bp: 'dia_bp'
   }
 };
+
+/**
+ * Height & Weight Unit Conversion Helpers (cm <-> ft/in, kg <-> lbs)
+ */
+export function cmToFeetInches(cm) {
+  if (!cm || isNaN(Number(cm))) return { feet: '', inches: '' };
+  const totalInches = Number(cm) / 2.54;
+  let feet = Math.floor(totalInches / 12);
+  let inches = Math.round(totalInches % 12);
+  if (inches === 12) {
+    feet += 1;
+    inches = 0;
+  }
+  return { feet, inches };
+}
+
+export function feetInchesToCm(feet, inches) {
+  const f = parseFloat(feet) || 0;
+  const i = parseFloat(inches) || 0;
+  if (f === 0 && i === 0) return '';
+  return Math.round((f * 12 + i) * 2.54);
+}
+
+export function kgToLbs(kg) {
+  if (!kg || isNaN(Number(kg))) return '';
+  return parseFloat((Number(kg) * 2.20462).toFixed(1));
+}
+
+export function lbsToKg(lbs) {
+  if (!lbs || isNaN(Number(lbs))) return '';
+  return parseFloat((Number(lbs) / 2.20462).toFixed(1));
+}
+
+export function formatHeightDisplay(cm) {
+  if (!cm) return '—';
+  const { feet, inches } = cmToFeetInches(cm);
+  return `${cm} cm (${feet}'${inches}")`;
+}
+
+export function formatWeightDisplay(kg) {
+  if (!kg) return '—';
+  const lbs = kgToLbs(kg);
+  return `${kg} kg (${lbs} lbs)`;
+}
+
+/**
+ * Determine biological sex strictly based on pedigree relationship (No manual gender input)
+ */
+export function getGenderForRelationship(relationship) {
+  const rel = (relationship || '').toLowerCase();
+  const maleKeywords = [
+    'father',
+    'brother',
+    'paternal grandfather',
+    'maternal grandfather',
+    'grandfather',
+    'son',
+    'uncle',
+    'nephew'
+  ];
+  if (maleKeywords.some((k) => rel === k || rel.includes(k))) {
+    return 'Male';
+  }
+  return 'Female';
+}
+

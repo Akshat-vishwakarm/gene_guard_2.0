@@ -21,7 +21,10 @@ import {
 } from './utils/normalValueRegistry';
 import { API_BASE } from './utils/apiConfig';
 import { DEFAULT_MODEL_SCHEMAS } from './data/defaultModelSchemas';
+import { DEMO_CANVAS_FAMILY } from './data/demoData';
 import { predictDiseaseClientSide, generateFinalAnalysisClientSide } from './utils/clinicalInferenceEngine';
+import { evaluateAnalysisUnlockCriteria } from './utils/analysisUnlockCriteria';
+import NavigationGuideHUD from './components/NavigationGuideHUD';
 
 export default function App() {
   const [inTitleScreen, setInTitleScreen] = useState(true);
@@ -30,6 +33,10 @@ export default function App() {
   const [schemas, setSchemas] = useState(DEFAULT_MODEL_SCHEMAS);
   const [familyList, setFamilyList] = useState([]);
   const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+
+  // GAME-STYLE MISSION NAVIGATION GUIDE STATE
+  const [isGuideActive, setIsGuideActive] = useState(false);
+  const [guideStep, setGuideStep] = useState(0);
 
   // FEATURE 1: GLOBAL PATIENT PROFILE (Single Source of Truth)
   const [patientProfile, setPatientProfile] = useState({
@@ -191,6 +198,7 @@ export default function App() {
     setPredictionResults({});
     setMissingFieldsMap({});
     setIsPredictingMap({});
+    setGuideStep(0);
     setVerifiedLabData({});
     setDemoFieldsMap({
       cardiovascular: {},
@@ -558,6 +566,25 @@ export default function App() {
 
   // Generate Final Combined Analysis
   const handleGenerateFinalAnalysis = async () => {
+    // ENFORCE UNLOCK CRITERIA:
+    // 1. Profile complete, 2. All 5 disease models input, 3. At least 2 family members in tree
+    const unlockCriteria = evaluateAnalysisUnlockCriteria(
+      patientProfile,
+      formValues,
+      predictionResults,
+      canvasFamilyMembers
+    );
+
+    if (!unlockCriteria.isUnlocked) {
+      alert(
+        `Final Analysis is locked. Please satisfy all 3 criteria:\n` +
+        `• 1. Patient Profile complete: ${unlockCriteria.isProfileComplete ? '✓' : '✗'}\n` +
+        `• 2. All 5 disease models input: ${unlockCriteria.completedDiseasesCount}/5\n` +
+        `• 3. At least 2 family members in tree: ${unlockCriteria.familyCount}/2`
+      );
+      return;
+    }
+
     const selfPayload = getSelfDataForAnalysis();
 
     setIsProcessingAnalysis(true);
@@ -601,12 +628,123 @@ export default function App() {
     setShowReportModal(true);
   };
 
+  // INTERACTIVE FEATURE NAVIGATION GUIDE HANDLERS
+  // Highlights information and moves through all 5 disease models one by one
+  const handleGuideNextStep = (stepIndex) => {
+    if (stepIndex === 0) {
+      // Step 0 -> Step 1: Upload Lab Report
+      setActiveTab('input');
+      setGuideStep(1);
+    } else if (stepIndex === 1) {
+      // Step 1 -> Step 2: Auto Fill Normal Biomarkers
+      setActiveTab('input');
+      setGuideStep(2);
+    } else if (stepIndex === 2) {
+      // Step 2 -> Step 3: Model 1 - Cardiovascular Disease
+      setActiveTab('input');
+      setActiveModule('cardiovascular');
+      setGuideStep(3);
+    } else if (stepIndex === 3) {
+      // Step 3 -> Step 4: Model 2 - Metabolic & Type 2 Diabetes
+      setActiveTab('input');
+      setActiveModule('metabolic');
+      setGuideStep(4);
+    } else if (stepIndex === 4) {
+      // Step 4 -> Step 5: Model 3 - Hypertension & Blood Pressure
+      setActiveTab('input');
+      setActiveModule('blood_pressure');
+      setGuideStep(5);
+    } else if (stepIndex === 5) {
+      // Step 5 -> Step 6: Model 4 - Thyroid Endocrine Axis
+      setActiveTab('input');
+      setActiveModule('thyroid');
+      setGuideStep(6);
+    } else if (stepIndex === 6) {
+      // Step 6 -> Step 7: Model 5 - Oncology & Cellular Cytology
+      setActiveTab('input');
+      setActiveModule('cancer');
+      setGuideStep(7);
+    } else if (stepIndex === 7) {
+      // Step 7 -> Step 8: Family Pedigree Canvas
+      setActiveTab('family');
+      setGuideStep(8);
+    } else if (stepIndex === 8) {
+      // Step 8 -> Step 9: Final Combined Multi-Organ Analysis
+      setActiveTab('family');
+      setGuideStep(9);
+    } else if (stepIndex === 9) {
+      // Step 9 -> Step 10: Walkthrough Complete
+      setGuideStep(10);
+    }
+  };
+
+  const handleGuidePrevStep = (stepIndex) => {
+    const prev = Math.max(0, (stepIndex !== undefined ? stepIndex : guideStep) - 1);
+    if (prev <= 2) {
+      setActiveTab('input');
+    } else if (prev === 3) {
+      setActiveTab('input');
+      setActiveModule('cardiovascular');
+    } else if (prev === 4) {
+      setActiveTab('input');
+      setActiveModule('metabolic');
+    } else if (prev === 5) {
+      setActiveTab('input');
+      setActiveModule('blood_pressure');
+    } else if (prev === 6) {
+      setActiveTab('input');
+      setActiveModule('thyroid');
+    } else if (prev === 7) {
+      setActiveTab('input');
+      setActiveModule('cancer');
+    } else if (prev >= 8) {
+      setActiveTab('family');
+    }
+    setGuideStep(prev);
+  };
+
+  const handleGuideSkip = () => {
+    setIsGuideActive(false);
+    try {
+      sessionStorage.setItem('geneguard_guide_dismissed', 'true');
+    } catch (e) {}
+  };
+
+  const handleGuideRestart = () => {
+    setGuideStep(0);
+    setActiveTab('input');
+    setActiveModule('cardiovascular');
+    setIsGuideActive(true);
+  };
+
+  const handleToggleGuide = () => {
+    if (isGuideActive) {
+      setIsGuideActive(false);
+    } else {
+      setIsGuideActive(true);
+      if (guideStep >= 10) {
+        setGuideStep(0);
+        setActiveTab('input');
+        setActiveModule('cardiovascular');
+      }
+    }
+  };
+
   if (inTitleScreen) {
     return (
       <TitleScreenMenu
         onStartGeneGuard={() => {
           setInTitleScreen(false);
           setActiveTab('input');
+          try {
+            const dismissed = sessionStorage.getItem('geneguard_guide_dismissed');
+            if (!dismissed) {
+              setIsGuideActive(true);
+              setGuideStep(0);
+            }
+          } catch (e) {
+            setIsGuideActive(true);
+          }
         }}
       />
     );
@@ -625,6 +763,8 @@ export default function App() {
         isChatbotOpen={isChatbotOpen}
         onToggleChatbot={() => setIsChatbotOpen(!isChatbotOpen)}
         onReturnToTitleScreen={() => setInTitleScreen(true)}
+        isGuideActive={isGuideActive}
+        onToggleGuide={handleToggleGuide}
       />
 
       <main className="main-content" style={{ padding: activeTab === 'family' ? '16px 20px 20px' : '24px 20px 60px' }}>
@@ -726,6 +866,9 @@ export default function App() {
             onBackToInput={() => setActiveTab('input')}
             onGenerateFinalAnalysis={handleGenerateFinalAnalysis}
             onOpenReportUpload={() => handleOpenUploadModal(null)}
+            patientProfile={patientProfile}
+            formValues={formValues}
+            predictionResults={predictionResults}
           />
         )}
 
@@ -771,6 +914,23 @@ export default function App() {
         setIsOpen={setIsChatbotOpen}
         onNavigateTab={setActiveTab}
       />
+
+      {/* INTERACTIVE GAME-STYLE MISSION NAVIGATION HUD */}
+      {isGuideActive && (
+        <NavigationGuideHUD
+          currentStep={guideStep}
+          onNextStep={handleGuideNextStep}
+          onPrevStep={handleGuidePrevStep}
+          onSkip={handleGuideSkip}
+          onRestart={handleGuideRestart}
+          patientProfile={patientProfile}
+          canvasFamilyMembers={canvasFamilyMembers}
+          formValues={formValues}
+          predictionResults={predictionResults}
+          activeTab={activeTab}
+          activeModule={activeModule}
+        />
+      )}
       </div>
     </>
   );

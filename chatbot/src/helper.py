@@ -47,7 +47,18 @@ class MedicalRetriever:
 
         q_clean = re.sub(r"[^\w\s]", " ", query).strip()
         q_vec = vectorizer.transform([q_clean])
-        sims = cosine_similarity(q_vec, matrix)[0]
+        sims = cosine_similarity(q_vec, matrix)[0].copy()
+
+        # Specific entity presence boosting (e.g. parkinson, alzheimer, glaucoma)
+        COMMON = {"disease", "syndrome", "condition", "disorder", "what", "is", "how", "and", "the", "for"}
+        words = [w for w in q_clean.lower().split() if w not in COMMON and len(w) > 3]
+        if words:
+            for idx, c in enumerate(chunks):
+                c_low = c["text"].lower()
+                for w in words:
+                    stem = w[:-1] if w.endswith("s") else w
+                    if stem in c_low:
+                        sims[idx] += 0.45
 
         top_indices = sims.argsort()[-k:][::-1]
         results = []
@@ -64,15 +75,19 @@ class MedicalRetriever:
 
 def call_gemini(prompt: str, api_key: str) -> str:
     """Invokes Google Gemini API with candidate fallbacks."""
-    candidate_models = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest"]
+    candidate_models = ["gemini-3.6-flash", "gemini-1.5-flash", "gemini-flash-latest"]
     for model in candidate_models:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.3, "maxOutputTokens": 300}
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": 800,
+                "thinkingConfig": {"thinkingBudget": 0}
+            }
         }
         try:
-            resp = requests.post(url, json=payload, timeout=12)
+            resp = requests.post(url, json=payload, timeout=8)
             if resp.status_code == 200:
                 data = resp.json()
                 text = data["candidates"][0]["content"]["parts"][0]["text"].strip()

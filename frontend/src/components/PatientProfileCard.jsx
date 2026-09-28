@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { User, CheckCircle2, AlertCircle, Edit3, X, Save, RotateCcw, Activity, ArrowRight } from 'lucide-react';
-import { calculateBmi } from '../utils/normalValueRegistry';
+import {
+  calculateBmi,
+  cmToFeetInches,
+  feetInchesToCm,
+  kgToLbs,
+  lbsToKg,
+  formatHeightDisplay,
+  formatWeightDisplay
+} from '../utils/normalValueRegistry';
 
 export default function PatientProfileCard({
   profile,
@@ -17,9 +25,24 @@ export default function PatientProfileCard({
     weight_kg: profile?.weight_kg ?? ''
   });
 
+  const [heightUnit, setHeightUnit] = useState('cm'); // 'cm' | 'ft'
+  const [weightUnit, setWeightUnit] = useState('kg'); // 'kg' | 'lbs'
+
+  const [heightFeet, setHeightFeet] = useState(() => {
+    const { feet } = cmToFeetInches(profile?.height_cm);
+    return feet !== '' ? String(feet) : '';
+  });
+  const [heightInches, setHeightInches] = useState(() => {
+    const { inches } = cmToFeetInches(profile?.height_cm);
+    return inches !== '' ? String(inches) : '';
+  });
+  const [weightLbs, setWeightLbs] = useState(() => {
+    const lbs = kgToLbs(profile?.weight_kg);
+    return lbs !== '' ? String(lbs) : '';
+  });
+
   const [validationError, setValidationError] = useState(null);
   const [isStatusHovered, setIsStatusHovered] = useState(false);
-
 
   // Sync internal form when external profile state changes
   useEffect(() => {
@@ -30,6 +53,20 @@ export default function PatientProfileCard({
       height_cm: profile?.height_cm ?? '',
       weight_kg: profile?.weight_kg ?? ''
     });
+    if (profile?.height_cm) {
+      const { feet, inches } = cmToFeetInches(profile.height_cm);
+      setHeightFeet(feet !== '' ? String(feet) : '');
+      setHeightInches(inches !== '' ? String(inches) : '');
+    } else {
+      setHeightFeet('');
+      setHeightInches('');
+    }
+    if (profile?.weight_kg) {
+      const lbs = kgToLbs(profile.weight_kg);
+      setWeightLbs(lbs !== '' ? String(lbs) : '');
+    } else {
+      setWeightLbs('');
+    }
   }, [profile]);
 
   // Derived auto-calculated BMI
@@ -41,6 +78,76 @@ export default function PatientProfileCard({
       [field]: value
     }));
     setValidationError(null);
+  };
+
+  const handleHeightCmChange = (val) => {
+    handleChange('height_cm', val);
+    if (val !== '' && !isNaN(Number(val))) {
+      const { feet, inches } = cmToFeetInches(val);
+      setHeightFeet(feet !== '' ? String(feet) : '');
+      setHeightInches(inches !== '' ? String(inches) : '');
+    } else {
+      setHeightFeet('');
+      setHeightInches('');
+    }
+  };
+
+  const handleHeightFtChange = (feetVal, inchesVal) => {
+    setHeightFeet(feetVal);
+    setHeightInches(inchesVal);
+    const cmVal = feetInchesToCm(feetVal, inchesVal);
+    handleChange('height_cm', cmVal !== '' ? cmVal : '');
+  };
+
+  const handleSwitchHeightUnit = (unit) => {
+    setHeightUnit(unit);
+    if (unit === 'ft') {
+      if (formData.height_cm) {
+        const { feet, inches } = cmToFeetInches(formData.height_cm);
+        setHeightFeet(feet !== '' ? String(feet) : '');
+        setHeightInches(inches !== '' ? String(inches) : '');
+      }
+    } else {
+      if (heightFeet || heightInches) {
+        const cmVal = feetInchesToCm(heightFeet, heightInches);
+        if (cmVal) handleChange('height_cm', cmVal);
+      }
+    }
+  };
+
+  const handleWeightKgChange = (val) => {
+    handleChange('weight_kg', val);
+    if (val !== '' && !isNaN(Number(val))) {
+      const lbs = kgToLbs(val);
+      setWeightLbs(lbs !== '' ? String(lbs) : '');
+    } else {
+      setWeightLbs('');
+    }
+  };
+
+  const handleWeightLbsChange = (val) => {
+    setWeightLbs(val);
+    if (val !== '' && !isNaN(Number(val))) {
+      const kg = lbsToKg(val);
+      handleChange('weight_kg', kg !== '' ? kg : '');
+    } else {
+      handleChange('weight_kg', '');
+    }
+  };
+
+  const handleSwitchWeightUnit = (unit) => {
+    setWeightUnit(unit);
+    if (unit === 'lbs') {
+      if (formData.weight_kg) {
+        const lbs = kgToLbs(formData.weight_kg);
+        setWeightLbs(lbs !== '' ? String(lbs) : '');
+      }
+    } else {
+      if (weightLbs) {
+        const kg = lbsToKg(weightLbs);
+        if (kg) handleChange('weight_kg', kg);
+      }
+    }
   };
 
   const handleSave = (e) => {
@@ -58,11 +165,11 @@ export default function PatientProfileCard({
       return;
     }
     if (isNaN(heightNum) || heightNum < 40 || heightNum > 260) {
-      setValidationError('Please enter a valid height in cm (40-260 cm).');
+      setValidationError('Please enter a valid height (40-260 cm / 1 ft 4 in - 8 ft 6 in).');
       return;
     }
     if (isNaN(weightNum) || weightNum < 15 || weightNum > 350) {
-      setValidationError('Please enter a valid weight in kg (15-350 kg).');
+      setValidationError('Please enter a valid weight (15-350 kg / 33-770 lbs).');
       return;
     }
 
@@ -90,6 +197,9 @@ export default function PatientProfileCard({
       height_cm: '',
       weight_kg: ''
     });
+    setHeightFeet('');
+    setHeightInches('');
+    setWeightLbs('');
     setValidationError(null);
     onClearProfile();
   };
@@ -105,6 +215,7 @@ export default function PatientProfileCard({
 
   return (
     <div
+      id="guide-patient-profile"
       className="card"
       style={{
         marginBottom: '24px',
@@ -210,6 +321,7 @@ export default function PatientProfileCard({
         {/* Action buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
+            id="guide-edit-profile-btn"
             type="button"
             className="btn btn-secondary"
             onClick={() => setIsEditorOpen(!isEditorOpen)}
@@ -381,7 +493,7 @@ export default function PatientProfileCard({
             Height
           </div>
           <div style={{ marginTop: '4px', fontSize: '0.92rem', fontWeight: 600, color: profile?.height_cm ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-            {profile?.height_cm ? `${profile.height_cm} cm` : '— Not set'}
+            {profile?.height_cm ? formatHeightDisplay(profile.height_cm) : '— Not set'}
           </div>
         </div>
 
@@ -401,7 +513,7 @@ export default function PatientProfileCard({
             Weight
           </div>
           <div style={{ marginTop: '4px', fontSize: '0.92rem', fontWeight: 600, color: profile?.weight_kg ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-            {profile?.weight_kg ? `${profile.weight_kg} kg` : '— Not set'}
+            {profile?.weight_kg ? formatWeightDisplay(profile.weight_kg) : '— Not set'}
           </div>
         </div>
 
@@ -506,40 +618,204 @@ export default function PatientProfileCard({
               </select>
             </div>
 
-            {/* Height (cm) */}
+            {/* Height (cm / ft) */}
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">
-                <span>Height (cm) <span className="required-tag">*</span></span>
-              </label>
-              <input
-                type="number"
-                step="any"
-                min="40"
-                max="260"
-                className="form-control"
-                placeholder="e.g. 175"
-                value={formData.height_cm}
-                onChange={(e) => handleChange('height_cm', e.target.value)}
-                required
-              />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <label className="form-label" style={{ marginBottom: 0 }}>
+                  <span>Height <span className="required-tag">*</span></span>
+                </label>
+                <div style={{
+                  display: 'inline-flex',
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  borderRadius: '6px',
+                  padding: '2px',
+                  border: '1px solid rgba(255, 255, 255, 0.12)'
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchHeightUnit('cm')}
+                    style={{
+                      padding: '2px 8px',
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      borderRadius: '4px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      background: heightUnit === 'cm' ? '#FFFFFF' : 'transparent',
+                      color: heightUnit === 'cm' ? '#000000' : '#94A3B8',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    cm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchHeightUnit('ft')}
+                    style={{
+                      padding: '2px 8px',
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      borderRadius: '4px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      background: heightUnit === 'ft' ? '#FFFFFF' : 'transparent',
+                      color: heightUnit === 'ft' ? '#000000' : '#94A3B8',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    ft / in
+                  </button>
+                </div>
+              </div>
+
+              {heightUnit === 'cm' ? (
+                <div>
+                  <input
+                    type="number"
+                    step="any"
+                    min="40"
+                    max="260"
+                    className="form-control"
+                    placeholder="e.g. 175"
+                    value={formData.height_cm}
+                    onChange={(e) => handleHeightCmChange(e.target.value)}
+                    required
+                  />
+                  <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '4px' }}>
+                    {formData.height_cm && !isNaN(Number(formData.height_cm))
+                      ? `≈ ${cmToFeetInches(formData.height_cm).feet} ft ${cmToFeetInches(formData.height_cm).inches} in`
+                      : 'Metric standard: 40-260 cm'}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="number"
+                        min="1"
+                        max="8"
+                        className="form-control"
+                        placeholder="5"
+                        value={heightFeet}
+                        onChange={(e) => handleHeightFtChange(e.target.value, heightInches)}
+                        style={{ paddingRight: '28px' }}
+                        required
+                      />
+                      <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.75rem', color: '#64748B' }}>ft</span>
+                    </div>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="number"
+                        min="0"
+                        max="11"
+                        className="form-control"
+                        placeholder="9"
+                        value={heightInches}
+                        onChange={(e) => handleHeightFtChange(heightFeet, e.target.value)}
+                        style={{ paddingRight: '28px' }}
+                      />
+                      <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.75rem', color: '#64748B' }}>in</span>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '4px' }}>
+                    {formData.height_cm ? `≈ ${formData.height_cm} cm` : 'Enter feet and inches'}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Weight (kg) */}
+            {/* Weight (kg / lbs) */}
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">
-                <span>Weight (kg) <span className="required-tag">*</span></span>
-              </label>
-              <input
-                type="number"
-                step="any"
-                min="15"
-                max="350"
-                className="form-control"
-                placeholder="e.g. 70"
-                value={formData.weight_kg}
-                onChange={(e) => handleChange('weight_kg', e.target.value)}
-                required
-              />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <label className="form-label" style={{ marginBottom: 0 }}>
+                  <span>Weight <span className="required-tag">*</span></span>
+                </label>
+                <div style={{
+                  display: 'inline-flex',
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  borderRadius: '6px',
+                  padding: '2px',
+                  border: '1px solid rgba(255, 255, 255, 0.12)'
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchWeightUnit('kg')}
+                    style={{
+                      padding: '2px 8px',
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      borderRadius: '4px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      background: weightUnit === 'kg' ? '#FFFFFF' : 'transparent',
+                      color: weightUnit === 'kg' ? '#000000' : '#94A3B8',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    kg
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchWeightUnit('lbs')}
+                    style={{
+                      padding: '2px 8px',
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      borderRadius: '4px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      background: weightUnit === 'lbs' ? '#FFFFFF' : 'transparent',
+                      color: weightUnit === 'lbs' ? '#000000' : '#94A3B8',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    lbs
+                  </button>
+                </div>
+              </div>
+
+              {weightUnit === 'kg' ? (
+                <div>
+                  <input
+                    type="number"
+                    step="any"
+                    min="15"
+                    max="350"
+                    className="form-control"
+                    placeholder="e.g. 70"
+                    value={formData.weight_kg}
+                    onChange={(e) => handleWeightKgChange(e.target.value)}
+                    required
+                  />
+                  <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '4px' }}>
+                    {formData.weight_kg && !isNaN(Number(formData.weight_kg))
+                      ? `≈ ${kgToLbs(formData.weight_kg)} lbs`
+                      : 'Metric standard: 15-350 kg'}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="number"
+                      step="any"
+                      min="33"
+                      max="770"
+                      className="form-control"
+                      placeholder="e.g. 154"
+                      value={weightLbs}
+                      onChange={(e) => handleWeightLbsChange(e.target.value)}
+                      style={{ paddingRight: '36px' }}
+                      required
+                    />
+                    <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.75rem', color: '#64748B' }}>lbs</span>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '4px' }}>
+                    {formData.weight_kg ? `≈ ${formData.weight_kg} kg` : 'Imperial pounds'}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* BMI Display (Auto-calculated, read-only) */}

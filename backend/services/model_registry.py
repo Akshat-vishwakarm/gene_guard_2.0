@@ -498,7 +498,8 @@ MODEL_REGISTRY = {
             "on_antithyroid_medication", "sick", "pregnant", "thyroid_surgery",
             "i131_treatment", "query_hypothyroid", "query_hyperthyroid", "lithium",
             "goitre", "tumor", "hypopituitary", "psych", "tsh_measured", "tsh",
-            "t3_measured", "t3", "tt4_measured", "tt4", "t4u_measured", "t4u",
+            "t3_measured", "t3", "tt4_measured",
+             "tt4", "t4u_measured", "t4u",
             "fti_measured", "fti", "tbg_measured", "referral_source"
         ],
         "preprocessing": "ColumnTransformer (KNNImputer for numeric, SimpleImputer+OneHotEncoder for categorical)",
@@ -506,6 +507,8 @@ MODEL_REGISTRY = {
         "supports_probability": True,
         "supports_shap": False,
         "ui_features": [
+
+            
             {
                 "key": "sex",
                 "label": "Sex",

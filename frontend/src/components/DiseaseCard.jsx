@@ -52,6 +52,7 @@ export default function DiseaseCard({
 
   return (
     <div
+      id={`guide-disease-card-${moduleKey}`}
       className="card"
       style={{
         cursor: 'pointer',

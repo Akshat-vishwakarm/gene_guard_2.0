@@ -17,6 +17,12 @@ if BACKEND_DIR not in sys.path:
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 from services.model_registry import MODEL_REGISTRY
 from services.prediction_service import prediction_service
 from services.report_extraction import (
@@ -37,6 +43,7 @@ from services.familyRiskEngine import (
 )
 from services.pre_report_service import PreReportService
 from services.gemini_evaluation_service import GeminiEvaluationService
+from services.chat_service import query_medical_book
 
 app = Flask(__name__)
 CORS(app)
@@ -553,6 +560,46 @@ def golden_test():
     })
 
 
+@app.route("/api/chat", methods=["POST"])
+def chat_endpoint():
+    """
+    GeneGuard Medical Knowledge Chatbot API
+    Queries the complete Gale Encyclopedia of Medicine (Medical_book.pdf, 637 pages)
+    using vector retrieval and Gemini RAG synthesis with exact page citations.
+    Supports ALL human diseases.
+    """
+    data = request.get_json(silent=True) or {}
+    message = data.get("message") or data.get("msg") or ""
+    if not message.strip():
+        return jsonify({"error": "Empty message"}), 400
+
+    result = query_medical_book(message)
+    return jsonify({
+        "status": "success",
+        "query": result["query"],
+        "answer": result["answer"],
+        "sources": result["sources"]
+    })
+
+
+@app.route("/get", methods=["GET", "POST"])
+def get_chat_text():
+    """
+    Backward-compatible string endpoint for jQuery AJAX chat submissions.
+    """
+    if request.method == "POST":
+        msg = request.form.get("msg", "")
+    else:
+        msg = request.args.get("msg", "")
+
+    if not msg or not msg.strip():
+        return "Please ask a medical question."
+
+    result = query_medical_book(msg)
+    return str(result.get("answer", ""))
+
+
 if __name__ == "__main__":
     print("[GeneGuard Backend] Starting server on http://localhost:5000...")
     app.run(host="0.0.0.0", port=5000, debug=True)
+

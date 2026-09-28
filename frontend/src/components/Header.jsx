@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, Users, FileText, LayoutDashboard, RotateCcw, Bot, Sparkles, User } from 'lucide-react';
+import { Activity, Users, FileText, LayoutDashboard, RotateCcw, Bot, Sparkles, User, Compass } from 'lucide-react';
 
 export default function Header({ 
   activeTab, 
@@ -9,7 +9,9 @@ export default function Header({
   onResetSession,
   isChatbotOpen,
   onToggleChatbot,
-  onReturnToTitleScreen
+  onReturnToTitleScreen,
+  isGuideActive,
+  onToggleGuide
 }) {
   return (
     <header className="navbar">
@@ -56,6 +58,7 @@ export default function Header({
           </button>
 
           <button
+            id="guide-family-tab-btn"
             className={`nav-btn ${activeTab === 'family' ? 'active' : ''}`}
             onClick={() => setActiveTab('family')}
           >
@@ -64,6 +67,7 @@ export default function Header({
           </button>
 
           <button
+            id="guide-dashboard-tab-btn"
             className={`nav-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
             onClick={() => setActiveTab('dashboard')}
           >
@@ -79,6 +83,37 @@ export default function Header({
             <span>Original Medical App</span>
           </button>
 
+          {/* Interactive Game-Style Mission Guide Button */}
+          {onToggleGuide && (
+            <button
+              id="guide-toggle-btn"
+              className={`nav-btn ${isGuideActive ? 'active' : ''}`}
+              onClick={onToggleGuide}
+              title="Toggle Interactive Game Walkthrough Guide"
+              style={{
+                borderColor: isGuideActive ? 'rgba(56, 189, 248, 0.5)' : undefined,
+                background: isGuideActive ? 'rgba(56, 189, 248, 0.12)' : undefined,
+                color: isGuideActive ? '#38BDF8' : undefined
+              }}
+            >
+              <Compass size={14} color={isGuideActive ? '#38BDF8' : 'currentColor'} />
+              <span>Mission Guide</span>
+              {isGuideActive && (
+                <span
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    background: '#38BDF8',
+                    boxShadow: '0 0 8px #38BDF8',
+                    display: 'inline-block',
+                    marginLeft: '2px'
+                  }}
+                />
+              )}
+            </button>
+          )}
+
           <button
             className={`nav-btn ${isChatbotOpen ? 'active' : ''}`}
             onClick={onToggleChatbot}
@@ -89,6 +124,7 @@ export default function Header({
           </button>
 
           <button
+            id="guide-header-upload-btn"
             className="btn btn-outline"
             onClick={() => setShowReportModal(true)}
             style={{ 

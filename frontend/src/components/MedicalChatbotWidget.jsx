@@ -12,9 +12,10 @@ import {
 } from 'lucide-react';
 import Loader from './Loader';
 import { getMedicalAnswer } from '../utils/medicalKnowledgeService';
+import { API_BASE } from '../utils/apiConfig';
 import './AiFloatingButton.css';
 
-// Using relative URL so all requests flow seamlessly through port 5173 via Vite proxy
+// Using relative URL or API_BASE so requests flow through Flask backend on port 5000
 const CHATBOT_URL = '';
 
 export default function MedicalChatbotWidget({ isOpen, setIsOpen, onNavigateTab }) {
@@ -68,14 +69,24 @@ export default function MedicalChatbotWidget({ isOpen, setIsOpen, onNavigateTab 
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${CHATBOT_URL}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: query })
-      });
+      let response = null;
+      try {
+        response = await fetch(`${API_BASE}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: query })
+        });
+      } catch {
+        // Fallback to relative /api/chat via Vite proxy
+        response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: query })
+        });
+      }
 
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}`);
+      if (!response || !response.ok) {
+        throw new Error(`Server returned ${response ? response.status : 'error'}`);
       }
 
       const data = await response.json();
@@ -564,21 +575,36 @@ export default function MedicalChatbotWidget({ isOpen, setIsOpen, onNavigateTab 
                         >
                           <BookOpen size={11} color="var(--accent-cyan)" />
                           <span>Sources:</span>
-                          {m.sources.map((s, i) => (
-                            <span
-                              key={i}
-                              style={{
-                                background: 'rgba(255, 255, 255, 0.03)',
-                                border: '1px solid rgba(255, 255, 255, 0.07)',
-                                padding: '1px 5px',
-                                borderRadius: '3px',
-                                color: 'var(--accent-cyan)',
-                                fontFamily: 'monospace'
-                              }}
-                            >
-                              Page {s.page}
-                            </span>
-                          ))}
+                          {m.sources.map((s, i) => {
+                            let label = '';
+                            if (typeof s === 'object' && s !== null) {
+                              if (s.page) label = `Page ${s.page}`;
+                              else if (s.title) label = s.title;
+                              else if (s.name) label = s.name;
+                              else label = 'Gale Encyclopedia';
+                            } else if (typeof s === 'number') {
+                              label = `Page ${s}`;
+                            } else if (typeof s === 'string' && s.trim()) {
+                              label = s.trim();
+                            } else {
+                              label = 'Gale Encyclopedia';
+                            }
+                            return (
+                              <span
+                                key={i}
+                                style={{
+                                  background: 'rgba(255, 255, 255, 0.03)',
+                                  border: '1px solid rgba(255, 255, 255, 0.07)',
+                                  padding: '1px 5px',
+                                  borderRadius: '3px',
+                                  color: 'var(--accent-cyan)',
+                                  fontFamily: 'monospace'
+                                }}
+                              >
+                                {label}
+                              </span>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

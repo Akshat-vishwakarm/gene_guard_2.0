@@ -47,7 +47,7 @@ export default function DynamicInputForm({
   };
 
   return (
-    <div className="card">
+    <div id="guide-dynamic-input-form" className="card">
       {/* HEADER & MODULE ACTION TOOLBAR */}
       <div
         className="card-header"
