@@ -67,7 +67,7 @@
 					$("#text").val("");
 					$("#messageFormeight").append(userHtml);
 
-					var loadingHtml = '<div id="aiLoadingIndicator" class="d-flex justify-content-start mb-4 align-items-center"><div class="geneguard-loader-wrapper"><div class="loader"><div class="box"><div class="logo"><img src="{{ url_for(\'static\', filename=\'geneguard-logo-symbol.png\') }}" class="loader-logo-img"></div></div><div class="box"></div><div class="box"></div><div class="box"></div><div class="box"></div></div></div><span style="color: #94a3b8; font-size: 0.8rem; margin-left: 14px;">GeneGuard AI researching...</span></div>';
+					var loadingHtml = '<div id="aiLoadingIndicator" class="d-flex justify-content-start mb-4 align-items-center"><div class="geneguard-loader-wrapper"><div class="loader"><div class="box"><div class="logo"><img src="{{ url_for("static", filename="geneguard-logo-symbol.png") }}" class="loader-logo-img"></div></div><div class="box"></div><div class="box"></div><div class="box"></div><div class="box"></div></div></div><span style="color: #94a3b8; font-size: 0.8rem; margin-left: 14px;">GeneGuard AI researching...</span></div>';
 					$("#messageFormeight").append(loadingHtml);
 					var chatBox = document.getElementById("messageFormeight");
 					if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
@@ -94,12 +94,12 @@
 							listHtml += '</ul>';
 							formatted = listHtml;
 						}
-						var botHtml = '<div class="d-flex justify-content-start mb-4"><div class="img_cont_msg"><img src="{{ url_for(\'static\', filename=\'geneguard-logo-symbol.png\') }}" class="rounded-circle user_img_msg" style="background: rgba(0,0,0,0.5); padding: 3px; border: 1px solid rgba(56, 189, 248, 0.4);"></div><div class="msg_cotainer">' + formatted + '<span class="msg_time">' + str_time + '</span></div></div>';
+						var botHtml = '<div class="d-flex justify-content-start mb-4"><div class="img_cont_msg"><img src="{{ url_for("static", filename="geneguard-logo-symbol.png") }}" class="rounded-circle user_img_msg" style="background: rgba(0,0,0,0.5); padding: 3px; border: 1px solid rgba(56, 189, 248, 0.4);"></div><div class="msg_cotainer">' + formatted + '<span class="msg_time">' + str_time + '</span></div></div>';
 						$("#messageFormeight").append($.parseHTML(botHtml));
 						if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
 					}).fail(function() {
 						$("#aiLoadingIndicator").remove();
-						var botHtml = '<div class="d-flex justify-content-start mb-4"><div class="img_cont_msg"><img src="{{ url_for(\'static\', filename=\'geneguard-logo-symbol.png\') }}" class="rounded-circle user_img_msg" style="background: rgba(0,0,0,0.5); padding: 3px; border: 1px solid rgba(56, 189, 248, 0.4);"></div><div class="msg_cotainer" style="color: #f87171;">Connection error. Please try again.<span class="msg_time">' + str_time + '</span></div></div>';
+						var botHtml = '<div class="d-flex justify-content-start mb-4"><div class="img_cont_msg"><img src="{{ url_for("static", filename="geneguard-logo-symbol.png") }}" class="rounded-circle user_img_msg" style="background: rgba(0,0,0,0.5); padding: 3px; border: 1px solid rgba(56, 189, 248, 0.4);"></div><div class="msg_cotainer" style="color: #f87171;">Connection error. Please try again.<span class="msg_time">' + str_time + '</span></div></div>';
 						$("#messageFormeight").append($.parseHTML(botHtml));
 						if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
 					});
