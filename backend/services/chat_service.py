@@ -27,16 +27,15 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 logger = logging.getLogger("geneguard.chat_service")
 
-# Resolve paths
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(os.path.dirname(CURRENT_DIR))
-INDEX_PATH = os.path.join(PROJECT_ROOT, "chatbot", "Data", "medical_index.joblib")
-PDF_PATH = os.path.join(PROJECT_ROOT, "chatbot", "Data", "Medical_book.pdf")
+# Resolve paths safely
+from .model_registry import BASE_DIR, resolve_model_path
+INDEX_PATH = resolve_model_path("medical_index.joblib", "chatbot/Data/medical_index.joblib")
+PDF_PATH = resolve_model_path("Medical_book.pdf", "chatbot/Data/Medical_book.pdf")
 
 try:
     from dotenv import load_dotenv
     load_dotenv()
-    chatbot_env = os.path.join(PROJECT_ROOT, "chatbot", ".env")
+    chatbot_env = os.path.join(str(BASE_DIR), "chatbot", ".env")
     if os.path.exists(chatbot_env) and not os.environ.get("GEMINI_API_KEY"):
         load_dotenv(chatbot_env)
 except ImportError:

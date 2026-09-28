@@ -10,18 +10,57 @@ Authoritative metadata registry based on empirical inspection of all 5 disease-m
 """
 
 import os
+import pathlib
+import logging
 
-# Base directory paths
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+logger = logging.getLogger("geneguard.model_registry")
+
+# Deployment-safe path resolution relative to current file
+CURRENT_FILE = pathlib.Path(__file__).resolve()
+SERVICES_DIR = CURRENT_FILE.parent               # .../backend/services
+BACKEND_DIR = SERVICES_DIR.parent                # .../backend
+BASE_DIR = BACKEND_DIR.parent                    # project root
+MODELS_DIR = BACKEND_DIR / "models"              # .../backend/models
+
+def resolve_model_path(*relative_candidates) -> str:
+    """
+    Deployment-safe path resolver: Searches multiple candidate locations for model artifacts:
+    1. backend/models/
+    2. Relative to BASE_DIR (project root)
+    3. Relative to current working directory
+    4. Relative to /var/task (Vercel serverless environment)
+    """
+    search_dirs = [
+        MODELS_DIR,
+        BACKEND_DIR,
+        BASE_DIR,
+        pathlib.Path.cwd(),
+        pathlib.Path("/var/task/backend/models"),
+        pathlib.Path("/var/task/models"),
+        pathlib.Path("/var/task")
+    ]
+    for rel_cand in relative_candidates:
+        cand_p = pathlib.Path(rel_cand)
+        if cand_p.is_absolute() and cand_p.exists():
+            return str(cand_p)
+        for base in search_dirs:
+            p = base / cand_p
+            if p.exists():
+                return str(p.resolve())
+
+    # Fallback to MODELS_DIR candidate
+    fallback = MODELS_DIR / relative_candidates[0]
+    logger.debug(f"[ModelRegistry] Artifact not found at search paths, falling back to: {fallback}")
+    return str(fallback.resolve())
 
 MODEL_REGISTRY = {
     "cardiovascular": {
         "id": "cardiovascular",
         "name": "Cardiovascular Analysis",
         "description": "Cardiovascular disease risk signal analysis using multi-factor clinical parameters.",
-        "model_file": os.path.join(BASE_DIR, "cardiovascular", "cardiovascular_model.pkl"),
-        "threshold_file": os.path.join(BASE_DIR, "cardiovascular", "cardiovascular_threshold.pkl"),
-        "features_file": os.path.join(BASE_DIR, "cardiovascular", "cardiovascular_features.pkl"),
+        "model_file": resolve_model_path("cardiovascular_model.pkl", "cardiovascular/cardiovascular_model.pkl"),
+        "threshold_file": resolve_model_path("cardiovascular_threshold.pkl", "cardiovascular/cardiovascular_threshold.pkl"),
+        "features_file": resolve_model_path("cardiovascular_features.pkl", "cardiovascular/cardiovascular_features.pkl"),
         "model_type": "scikit-learn Pipeline (ColumnTransformer + RandomForestClassifier)",
         "features_order": [
             "age_years", "gender", "height", "weight", "ap_hi", "ap_lo",
@@ -165,8 +204,8 @@ MODEL_REGISTRY = {
         "id": "metabolic",
         "name": "Metabolic Analysis",
         "description": "Evaluation of metabolic syndrome risk based on blood glucose, lipid panel, and body composition.",
-        "model_file": os.path.join(BASE_DIR, "matabolic", "model", "metabolic_model.pkl"),
-        "scaler_file": os.path.join(BASE_DIR, "matabolic", "model", "scaler.pkl"),
+        "model_file": resolve_model_path("metabolic_model.pkl", "matabolic/model/metabolic_model.pkl"),
+        "scaler_file": resolve_model_path("scaler.pkl", "matabolic/model/scaler.pkl"),
         "model_type": "RandomForestClassifier with StandardScaler",
         "features_order": [
             "Age (years)", "Height (cm)", "Waist Circumference Pre (cm)", "BMI Pre",
@@ -327,8 +366,8 @@ MODEL_REGISTRY = {
         "id": "blood_pressure",
         "name": "Blood Pressure Analysis",
         "description": "Hypertension and blood pressure abnormality risk model based on clinical factors, lifestyle, and lab markers.",
-        "model_file": os.path.join(BASE_DIR, "bloop presure", "models", "blood_pressure_model.pkl"),
-        "metadata_file": os.path.join(BASE_DIR, "bloop presure", "models", "blood_pressure_metadata.pkl"),
+        "model_file": resolve_model_path("blood_pressure_model.pkl", "bloop presure/models/blood_pressure_model.pkl"),
+        "metadata_file": resolve_model_path("blood_pressure_metadata.pkl", "bloop presure/models/blood_pressure_metadata.pkl"),
         "model_type": "Pipeline (SimpleImputer + StandardScaler + Calibrated Blended Ensemble)",
         "features_order": [
             "Level_of_Hemoglobin", "Genetic_Pedigree_Coefficient", "Age", "BMI", "Sex",
@@ -491,7 +530,7 @@ MODEL_REGISTRY = {
         "id": "thyroid",
         "name": "Thyroid Analysis",
         "description": "Thyroid disorder risk prediction using hormonal lab values and clinical history.",
-        "model_file": os.path.join(BASE_DIR, "thyroid", "models", "gene_guard_thyroid_pipeline.pkl"),
+        "model_file": resolve_model_path("gene_guard_thyroid_pipeline.pkl", "thyroid/models/gene_guard_thyroid_pipeline.pkl"),
         "model_type": "scikit-learn Pipeline (ColumnTransformer + RandomForestClassifier)",
         "features_order": [
             "age", "sex", "on_thyroxine", "query_on_thyroxine",
@@ -675,7 +714,7 @@ MODEL_REGISTRY = {
         "id": "cancer",
         "name": "Cancer Risk Analysis",
         "description": "Multi-factorial risk assessment for lung cancer based on environmental exposures, symptoms, and lifestyle.",
-        "model_file": os.path.join(BASE_DIR, "cancer", "model.joblib"),
+        "model_file": resolve_model_path("cancer_model.joblib", "cancer/model.joblib"),
         "model_type": "RandomForestClassifier",
         "features_order": [
             "Age", "Gender", "AirPollution", "Alcoholuse", "DustAllergy",

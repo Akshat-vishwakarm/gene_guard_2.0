@@ -32,59 +32,88 @@ class PredictionService:
         self.feature_names = {}
         self._load_all_models()
 
+    def _load_single_model(self, disease_module: str):
+        """Loads a single model on demand with deployment-safe error handling."""
+        if disease_module not in MODEL_REGISTRY:
+            return
+
+        conf = MODEL_REGISTRY[disease_module]
+        mf = conf.get("model_file")
+
+        if disease_module == "cardiovascular":
+            tf = conf.get("threshold_file")
+            if mf and os.path.exists(mf) and tf and os.path.exists(tf):
+                try:
+                    c_model = joblib.load(mf)
+                    c_thresh = float(joblib.load(tf))
+                    self.models["cardiovascular"] = c_model
+                    self.thresholds["cardiovascular"] = c_thresh
+                    if HAS_SHAP and shap is not None:
+                        try:
+                            preproc = c_model.named_steps["preprocessor"]
+                            rf_clf = c_model.named_steps["classifier"]
+                            self.preprocessors["cardiovascular"] = preproc
+                            self.feature_names["cardiovascular"] = preproc.get_feature_names_out()
+                            self.explainers["cardiovascular"] = shap.TreeExplainer(rf_clf)
+                        except Exception as e:
+                            print(f"[GeneGuard] SHAP init warning for Cardiovascular: {e}")
+                    print(f"[GeneGuard] Loaded Cardiovascular model (Threshold: {c_thresh}).")
+                except Exception as ex:
+                    print(f"[GeneGuard] Error loading Cardiovascular model from {mf}: {ex}")
+            else:
+                print(f"[GeneGuard] Cardiovascular artifact not found. Searched: {mf}")
+
+        elif disease_module == "metabolic":
+            sf = conf.get("scaler_file")
+            if mf and os.path.exists(mf) and sf and os.path.exists(sf):
+                try:
+                    self.models["metabolic"] = joblib.load(mf)
+                    self.scalers["metabolic"] = joblib.load(sf)
+                    print("[GeneGuard] Loaded Metabolic model and StandardScaler.")
+                except Exception as ex:
+                    print(f"[GeneGuard] Error loading Metabolic model from {mf}: {ex}")
+            else:
+                print(f"[GeneGuard] Metabolic artifact not found. Searched: {mf}")
+
+        elif disease_module == "blood_pressure":
+            if mf and os.path.exists(mf):
+                try:
+                    self.models["blood_pressure"] = joblib.load(mf)
+                    print("[GeneGuard] Loaded Blood Pressure model pipeline.")
+                except Exception as ex:
+                    print(f"[GeneGuard] Error loading Blood Pressure model from {mf}: {ex}")
+            else:
+                print(f"[GeneGuard] Blood Pressure artifact not found. Searched: {mf}")
+
+        elif disease_module == "thyroid":
+            if mf and os.path.exists(mf):
+                try:
+                    with open(mf, "rb") as f:
+                        self.models["thyroid"] = pickle.load(f)
+                    print("[GeneGuard] Loaded Thyroid model.")
+                except Exception as ex:
+                    print(f"[GeneGuard] Error loading Thyroid model from {mf}: {ex}")
+            else:
+                print(f"[GeneGuard] Thyroid artifact not found. Searched: {mf}")
+
+        elif disease_module == "cancer":
+            if mf and os.path.exists(mf):
+                try:
+                    payload = joblib.load(mf)
+                    if isinstance(payload, dict) and "model" in payload:
+                        self.models["cancer"] = payload["model"]
+                    else:
+                        self.models["cancer"] = payload
+                    print("[GeneGuard] Loaded Cancer model.")
+                except Exception as ex:
+                    print(f"[GeneGuard] Error loading Cancer model from {mf}: {ex}")
+            else:
+                print(f"[GeneGuard] Cancer artifact not found. Searched: {mf}")
+
     def _load_all_models(self):
         print("[GeneGuard] Initializing Prediction Service and loading models...")
-
-        # 1. Cardiovascular
-        c_conf = MODEL_REGISTRY["cardiovascular"]
-        if os.path.exists(c_conf["model_file"]):
-            c_model = joblib.load(c_conf["model_file"])
-            c_thresh = float(joblib.load(c_conf["threshold_file"]))
-            self.models["cardiovascular"] = c_model
-            self.thresholds["cardiovascular"] = c_thresh
-
-            if HAS_SHAP and shap is not None:
-                try:
-                    preproc = c_model.named_steps["preprocessor"]
-                    rf_clf = c_model.named_steps["classifier"]
-                    self.preprocessors["cardiovascular"] = preproc
-                    self.feature_names["cardiovascular"] = preproc.get_feature_names_out()
-                    self.explainers["cardiovascular"] = shap.TreeExplainer(rf_clf)
-                    print(f"[GeneGuard] Loaded Cardiovascular model (Threshold: {c_thresh}).")
-                except Exception as e:
-                    print(f"[GeneGuard] Warning initializing SHAP for Cardiovascular: {e}")
-            else:
-                print(f"[GeneGuard] Loaded Cardiovascular model (Threshold: {c_thresh}, SHAP explainer skipped).")
-
-        # 2. Metabolic
-        m_conf = MODEL_REGISTRY["metabolic"]
-        if os.path.exists(m_conf["model_file"]) and os.path.exists(m_conf["scaler_file"]):
-            self.models["metabolic"] = joblib.load(m_conf["model_file"])
-            self.scalers["metabolic"] = joblib.load(m_conf["scaler_file"])
-            print("[GeneGuard] Loaded Metabolic model and StandardScaler.")
-
-        # 3. Blood Pressure
-        bp_conf = MODEL_REGISTRY["blood_pressure"]
-        if os.path.exists(bp_conf["model_file"]):
-            self.models["blood_pressure"] = joblib.load(bp_conf["model_file"])
-            print("[GeneGuard] Loaded Blood Pressure model pipeline.")
-
-        # 4. Thyroid
-        t_conf = MODEL_REGISTRY["thyroid"]
-        if os.path.exists(t_conf["model_file"]):
-            with open(t_conf["model_file"], "rb") as f:
-                self.models["thyroid"] = pickle.load(f)
-            print("[GeneGuard] Loaded Thyroid model.")
-
-        # 5. Cancer
-        ca_conf = MODEL_REGISTRY["cancer"]
-        if os.path.exists(ca_conf["model_file"]):
-            payload = joblib.load(ca_conf["model_file"])
-            if isinstance(payload, dict) and "model" in payload:
-                self.models["cancer"] = payload["model"]
-            else:
-                self.models["cancer"] = payload
-            print("[GeneGuard] Loaded Cancer model.")
+        for mod in ["cardiovascular", "metabolic", "blood_pressure", "thyroid", "cancer"]:
+            self._load_single_model(mod)
 
     def predict_disease(self, disease_module: str, input_dict: dict) -> dict:
         """Runs prediction for a single disease module."""
@@ -96,9 +125,14 @@ class PredictionService:
 
         config = MODEL_REGISTRY[disease_module]
         if disease_module not in self.models:
+            # Try on-demand lazy load
+            self._load_single_model(disease_module)
+
+        if disease_module not in self.models:
+            searched_path = config.get("model_file", "unknown")
             return {
                 "available": False,
-                "reason": "Model file not loaded on server.",
+                "reason": f"Model artifact for '{disease_module}' not found on server (Searched: {searched_path}).",
                 "missing_fields": []
             }
 

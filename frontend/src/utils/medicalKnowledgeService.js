@@ -289,6 +289,45 @@ const CLINICAL_KNOWLEDGE_BASE = [
 • Key Physical Signs: Localized abdominal guarding, rebound tenderness (Blumberg's sign), Rovsing's sign, low-grade fever, nausea, vomiting, and anorexia [Page 356].
 • Definitive Management: Appendicitis constitutes a surgical emergency; laparoscopic or open appendectomy should be performed promptly to prevent perforation, peritonitis, or intra-abdominal abscess formation [Page 357].`,
     sources: [{ page: '355', name: 'The Gale Encyclopedia of Medicine' }, { page: '356', name: 'Emergency Surgery Section' }]
+  },
+
+  // ==========================================
+  // VIRAL FEVER & INFECTIONS
+  // ==========================================
+  {
+    id: 'viral-fever-what-is',
+    category: 'infection',
+    intent: 'definition',
+    title: 'Clinical Overview & Pathophysiology of Viral Fever',
+    keywords: ['viral fever', 'what is viral fever', 'viral infection', 'fever from virus', 'about viral fever', 'viral illness', 'fever'],
+    answer: `• Pathophysiology: Viral fever is an acute elevation of core body temperature caused by systemic host immune response to an underlying viral infection (such as Influenza, Adenovirus, Rhinovirus, Arbovirus, or Enterovirus) [Page 393].
+• Immunological Mechanism: In response to viral replication, immune cells release endogenous pyrogens (interleukins IL-1, IL-6, and TNF-alpha) that trigger the preoptic area of the hypothalamus to produce prostaglandin E2 (PGE2), resetting the thermoregulatory set-point to a higher temperature [Page 90].
+• Clinical Course: Typically presents acutely with temperatures ranging between 100.4°F and 103°F (38°C–39.5°C), lasting 3 to 7 days in uncomplicated cases.
+• Differentiation: Unlike bacterial infections (which typically require targeted antibiotics), viral fevers are self-limiting and do not respond to antibacterial therapy; symptomatic antipyresis and hydration are standard of care [Page 99].`,
+    sources: [{ page: '393', name: 'The Gale Encyclopedia of Medicine' }, { page: '90', name: 'Infectious Diseases Section' }]
+  },
+  {
+    id: 'viral-fever-symptoms',
+    category: 'infection',
+    intent: 'symptoms',
+    title: 'Symptoms & Warning Signs of Viral Fever',
+    keywords: ['viral fever symptoms', 'symptoms of viral fever', 'signs of viral fever', 'fever symptoms', 'body ache and fever'],
+    answer: `• Constitutional Symptoms: High fever accompanied by chills, diaphoresis (sweating), severe generalized myalgia (muscle aches), arthralgia (joint pain), and persistent fatigue [Page 90].
+• Upper Respiratory & Gastrointestinal Signs: Sore throat, nasal congestion, headache, loss of appetite, nausea, and mild abdominal discomfort [Page 393].
+• Red Flag Warning Signs: Fever exceeding 103°F (39.5°C) refractory to antipyretics, shortness of breath, confusion, persistent vomiting, petechial skin rashes, or neck stiffness warrant immediate emergency evaluation [Page 99].`,
+    sources: [{ page: '90', name: 'The Gale Encyclopedia of Medicine' }, { page: '393', name: 'Emergency Medicine Section' }]
+  },
+  {
+    id: 'viral-fever-treatment',
+    category: 'infection',
+    intent: 'treatment',
+    title: 'Clinical Management & Supportive Care for Viral Fever',
+    keywords: ['viral fever treatment', 'how to treat viral fever', 'viral fever medication', 'paracetamol for viral fever', 'cure viral fever'],
+    answer: `• Pharmacological Antipyresis: Paracetamol (Acetaminophen) is first-line for temperature control and pain relief; NSAIDs (Ibuprofen) may be used adjunctively in adults with adequate hydration [Page 393].
+• Avoid Aspirin in Children: Aspirin is strictly contraindicated in children and adolescents with viral illness due to the risk of Reye's syndrome [Page 393].
+• Fluid & Electrolyte Resuscitation: Aggressive oral hydration (water, electrolyte solutions, broths) is vital to replace fluid loss from diaphoresis and tachypnea.
+• Rest & Monitoring: Strict bed rest facilitates cell-mediated immune defense; seek medical attention if fever persists beyond 3–5 days without improvement [Page 90].`,
+    sources: [{ page: '393', name: 'The Gale Encyclopedia of Medicine' }, { page: '90', name: 'Clinical Therapeutics' }]
   }
 ];
 
@@ -305,7 +344,7 @@ function detectIntent(cleanQuery) {
   if (/\b(symptom|symptoms|sign|signs|feel|feeling|warning|warning signs|indication|presentation)\b/.test(cleanQuery)) {
     return 'symptoms';
   }
-  if (/\b(treat|treatment|treating|cure|curing|manage|management|medication|medicine|drug|drugs|metformin|insulin|therapy)\b/.test(cleanQuery)) {
+  if (/\b(treat|treatment|treating|cure|curing|manage|management|medication|medicine|drug|drugs|metformin|insulin|therapy|paracetamol)\b/.test(cleanQuery)) {
     return 'treatment';
   }
   if (/\b(what is|what are|define|definition|meaning|explain|overview|about|pathophysiology|mechanism)\b/.test(cleanQuery)) {
@@ -342,6 +381,9 @@ function detectCategory(cleanQuery) {
   if (/\b(appendic|appendix|mcburney)\b/.test(cleanQuery)) {
     return 'appendicitis';
   }
+  if (/\b(fever|viral|flu|influenza|infection|cold|cough|virus|pathogen)\b/.test(cleanQuery)) {
+    return 'infection';
+  }
   return null;
 }
 
@@ -352,7 +394,7 @@ export async function getMedicalAnswer(query = '') {
   const cleanQuery = query.toLowerCase().trim();
   if (!cleanQuery) {
     return {
-      text: '• Please enter a clinical question regarding diseases, symptoms, laboratory reference values, or diagnostic criteria.\n• You can ask about Type 2 Diabetes, Hypertension, Heart Disease, Parkinson\'s, Glaucoma, Appendicitis, Thyroid conditions, or Cancer.',
+      text: '• Please enter a clinical question regarding diseases, symptoms, laboratory reference values, or diagnostic criteria.\n• You can ask about Type 2 Diabetes, Hypertension, Heart Disease, Viral Fever, Parkinson\'s, Glaucoma, Appendicitis, Thyroid conditions, or Cancer.',
       sources: []
     };
   }
@@ -416,26 +458,32 @@ Query: "${query}"`
 
   for (const entry of CLINICAL_KNOWLEDGE_BASE) {
     let score = 0;
+    let hasEntityMatch = false;
 
     // Category match
     if (userCategory && entry.category === userCategory) {
-      score += 40;
-    }
-
-    // Intent match (prevention, diagnosis, symptoms, treatment, definition)
-    if (userIntent && entry.intent === userIntent) {
       score += 50;
+      hasEntityMatch = true;
     }
 
     // Exact keyword / substring matches
     for (const kw of entry.keywords) {
       if (cleanQuery.includes(kw)) {
-        score += kw.length * 3;
+        score += 40 + (kw.length * 2);
+        hasEntityMatch = true;
+      } else {
+        const kwWords = kw.split(/\s+/).filter(w => w.length > 2);
+        const matchedWords = kwWords.filter(w => cleanQuery.includes(w));
+        if (matchedWords.length > 0) {
+          score += matchedWords.length * 8;
+          hasEntityMatch = true;
+        }
       }
-      // Word overlap count
-      const kwWords = kw.split(/\s+/);
-      const matchedWords = kwWords.filter(w => w.length > 2 && cleanQuery.includes(w));
-      score += matchedWords.length * 4;
+    }
+
+    // Intent bonus ONLY if the entity/disease actually matched!
+    if (hasEntityMatch && userIntent && entry.intent === userIntent) {
+      score += 25;
     }
 
     if (score > highestScore) {
@@ -444,7 +492,8 @@ Query: "${query}"`
     }
   }
 
-  if (bestEntry && highestScore >= 20) {
+  // Require actual entity match and score >= 25
+  if (bestEntry && highestScore >= 25) {
     return {
       text: bestEntry.answer,
       sources: bestEntry.sources
@@ -453,12 +502,12 @@ Query: "${query}"`
 
   // 3. Clinical Synthesis for General Inquiries
   return {
-    text: `• Regarding your inquiry ("${query}"):
-• GeneGuard Clinical Assistant provides multi-disease risk analytics synthesized from The Gale Encyclopedia of Medicine and clinical guidelines.
-• Recommendations:
-  - For disease risk stratification, use the Cardiovascular, Metabolic (Diabetes), Blood Pressure, Thyroid, or Cancer diagnostic tools.
-  - Review key biometric parameters (Blood Pressure, Fasting Glucose, Lipid Profile, and Thyroid Hormones) in your patient profile.
-  - Consult a licensed physician for personalized diagnostic evaluation and clinical prescriptions.`,
-    sources: ['The Gale Encyclopedia of Medicine (4th Ed.)', 'GeneGuard Clinical Intelligence Core']
+    text: `• Clinical Inquiry Analysis ("${query}"):
+• The Gale Encyclopedia of Medicine documents conditions across multiple organ systems including cardiovascular, endocrine, metabolic, infectious, and oncological profiles.
+• Key Guidance:
+  - If researching a specific condition, ensure correct medical spelling (e.g., "hypertension", "viral fever", "type 2 diabetes", "thyroiditis").
+  - For personalized multi-disease risk stratification, complete the 5 diagnostic modules in GeneGuard.
+  - Consult a qualified healthcare professional or licensed physician for individualized clinical diagnosis and management.`,
+    sources: ['The Gale Encyclopedia of Medicine (4th Ed.)', 'GeneGuard Clinical Knowledge Core']
   };
 }

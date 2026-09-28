@@ -46,13 +46,29 @@ from services.gemini_evaluation_service import GeminiEvaluationService
 from services.chat_service import query_medical_book
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
+@app.route("/", methods=["GET"])
+@app.route("/health", methods=["GET"])
+@app.route("/api/health", methods=["GET"])
+def health_check():
+    """Health check endpoint to verify backend status and loaded ML models."""
+    return jsonify({
+        "status": "healthy",
+        "service": "GeneGuard Multi-Disease Health AI Platform",
+        "models_loaded": {
+            k: (k in prediction_service.models)
+            for k in ["cardiovascular", "metabolic", "blood_pressure", "thyroid", "cancer"]
+        },
+        "loaded_models_count": len(prediction_service.models)
+    })
 
 # In-memory Family Network Context (Starts completely empty for fresh session)
 FAMILY_NETWORK_DATA = []
 
 
 @app.route("/api/family/reset", methods=["POST"])
+@app.route("/family/reset", methods=["POST"])
 def reset_family_network():
     """Resets the in-memory family network state to empty."""
     global FAMILY_NETWORK_DATA
@@ -65,6 +81,7 @@ def reset_family_network():
 
 
 @app.route("/api/models/schema", methods=["GET"])
+@app.route("/models/schema", methods=["GET"])
 def get_model_schemas():
     """Returns dynamic input form schemas and feature requirements for all 5 disease models."""
     return jsonify({
@@ -74,6 +91,7 @@ def get_model_schemas():
 
 
 @app.route("/api/family", methods=["GET"])
+@app.route("/family", methods=["GET"])
 def get_family_network():
     """Returns available family network members and qualitative evidence context."""
     return jsonify({
@@ -83,6 +101,7 @@ def get_family_network():
 
 
 @app.route("/api/family/save", methods=["POST"])
+@app.route("/family/save", methods=["POST"])
 def save_family_network():
     """Saves updated family network structure and person details."""
     global FAMILY_NETWORK_DATA
@@ -98,6 +117,7 @@ def save_family_network():
 
 
 @app.route("/api/final-analysis", methods=["POST"])
+@app.route("/final-analysis", methods=["POST"])
 def final_analysis():
     """
     Stage 3: Runs ONE final combined analysis across personal data and family history.
@@ -258,6 +278,7 @@ def final_analysis():
 
 
 @app.route("/api/family-risk/registry", methods=["GET"])
+@app.route("/family-risk/registry", methods=["GET"])
 def get_family_risk_registry():
     """Returns disease configurations and model availability statuses from the Family Risk Registry."""
     return jsonify({
@@ -267,6 +288,7 @@ def get_family_risk_registry():
 
 
 @app.route("/api/predict", methods=["POST"])
+@app.route("/predict", methods=["POST"])
 def predict():
     """
     Executes disease risk prediction using existing trained models.
@@ -309,6 +331,7 @@ def predict():
 
 
 @app.route("/api/extract-report", methods=["POST"])
+@app.route("/extract-report", methods=["POST"])
 def extract_report():
     """
     Parses Thyroid or General Lab Reports (PDF, PNG, JPG, TXT),
@@ -347,6 +370,7 @@ def extract_report():
 
 
 @app.route("/api/confirm-report", methods=["POST"])
+@app.route("/confirm-report", methods=["POST"])
 def confirm_report():
     """
     Accepts user-verified lab metrics, routes them to relevant model feature mappers,
@@ -561,6 +585,7 @@ def golden_test():
 
 
 @app.route("/api/chat", methods=["POST"])
+@app.route("/chat", methods=["POST"])
 def chat_endpoint():
     """
     GeneGuard Medical Knowledge Chatbot API

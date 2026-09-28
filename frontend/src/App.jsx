@@ -351,11 +351,13 @@ export default function App() {
       if (response.ok) {
         const data = await response.json();
         if (data.status === 'success' && data.result) {
-          if (!data.result.available && data.result.missing_fields) {
+          if (!data.result.available && data.result.missing_fields && data.result.missing_fields.length > 0) {
             setMissingFieldsMap((prev) => ({ ...prev, [moduleKey]: data.result.missing_fields }));
           }
-          setPredictionResults((prev) => ({ ...prev, [moduleKey]: data.result }));
-          predictionDone = true;
+          if (data.result.available) {
+            setPredictionResults((prev) => ({ ...prev, [moduleKey]: data.result }));
+            predictionDone = true;
+          }
         }
       }
     } catch (err) {

@@ -61,6 +61,10 @@ def validate_and_map_features(disease_module: str, input_dict: dict) -> tuple[pd
         if f.get("required", True):
             key = f["key"]
             val = input_dict.get(key)
+            if (val is None or val == "") and key == "clubbing_finger_nails":
+                val = input_dict.get("clubbing_of_finger_nails")
+                if val is not None and val != "":
+                    input_dict["clubbing_finger_nails"] = val
             if val is None or val == "":
                 # Check for unit variations like height_ft / height_in
                 if key == "height" and (input_dict.get("height_ft") or input_dict.get("height")):
@@ -241,7 +245,7 @@ def validate_and_map_features(disease_module: str, input_dict: dict) -> tuple[pd
             "ShortnessofBreath": float(input_dict["shortness_of_breath"]),
             "Wheezing": float(input_dict["wheezing"]),
             "SwallowingDifficulty": float(input_dict["swallowing_difficulty"]),
-            "ClubbingofFingerNails": float(input_dict["clubbing_finger_nails"]),
+            "ClubbingofFingerNails": float(input_dict.get("clubbing_finger_nails") or input_dict.get("clubbing_of_finger_nails") or 1),
             "FrequentCold": float(input_dict["frequent_cold"]),
             "DryCough": float(input_dict["dry_cough"]),
             "Snoring": float(input_dict["snoring"])

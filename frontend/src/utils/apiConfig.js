@@ -4,9 +4,11 @@
  */
 
 export const getApiBase = () => {
-  // Explicit environment variable provided (e.g. in Vercel Project Settings)
-  if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL.replace(/\/+$/, '');
+  // Support both VITE_API_BASE_URL and VITE_API_URL (e.g. from Vercel / Render project settings)
+  const customUrl = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '').trim();
+  if (customUrl) {
+    const clean = customUrl.replace(/\/+$/, '');
+    return clean.endsWith('/api') ? clean : `${clean}/api`;
   }
 
   // Local development default
@@ -14,7 +16,7 @@ export const getApiBase = () => {
     return 'http://localhost:5000/api';
   }
 
-  // Production relative fallback (can be routed via vercel.json rewrites)
+  // Production relative fallback (routed via vercel.json rewrites)
   return '/api';
 };
 
