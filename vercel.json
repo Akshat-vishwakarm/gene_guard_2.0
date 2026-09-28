@@ -9,6 +9,11 @@
       "maxDuration": 60,
       "memory": 1024,
       "includeFiles": "backend/models/**,chatbot/Data/medical_index.joblib"
+    },
+    "api/chat.py": {
+      "maxDuration": 60,
+      "memory": 1024,
+      "includeFiles": "backend/models/**,chatbot/Data/medical_index.joblib"
     }
   },
   "rewrites": [
