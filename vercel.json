@@ -3,43 +3,5 @@
   "framework": "vite",
   "installCommand": "npm install --prefix frontend",
   "buildCommand": "npm run build --prefix frontend",
-  "outputDirectory": "frontend/dist",
-  "functions": {
-    "api/index.py": {
-      "maxDuration": 60,
-      "memory": 1024,
-      "includeFiles": "backend/models/**,chatbot/Data/medical_index.joblib"
-    },
-    "api/chat.py": {
-      "maxDuration": 60,
-      "memory": 1024,
-      "includeFiles": "backend/models/**,chatbot/Data/medical_index.joblib"
-    }
-  },
-  "rewrites": [
-    {
-      "source": "/api/chat",
-      "destination": "/api/chat.py"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/index.py"
-    },
-    {
-      "source": "/health",
-      "destination": "/api/index.py"
-    },
-    {
-      "source": "/model-info",
-      "destination": "/api/index.py"
-    },
-    {
-      "source": "/golden-test",
-      "destination": "/api/index.py"
-    },
-    {
-      "source": "/((?!api/).*)",
-      "destination": "/index.html"
-    }
-  ]
+  "outputDirectory": "frontend/dist"
 }

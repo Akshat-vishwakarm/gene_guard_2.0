@@ -7,12 +7,16 @@ and medical report extraction APIs.
 
 import os
 import sys
+import re
 from datetime import datetime
 
-# Ensure backend directory is in sys.path for direct imports
+# Ensure backend directory and project root are in sys.path for direct imports
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BACKEND_DIR)
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -46,7 +50,35 @@ from services.gemini_evaluation_service import GeminiEvaluationService
 from services.chat_service import query_medical_book
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
+# Configure CORS origins: allow frontend domain(s) from environment variable,
+# local development ports, and *.vercel.app deployment domains.
+allowed_origins_env = os.environ.get("FRONTEND_URL", "") or os.environ.get("ALLOWED_ORIGINS", "")
+custom_origins = [o.strip().rstrip("/") for o in allowed_origins_env.split(",") if o.strip()]
+
+default_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5000",
+    "http://127.0.0.1:5000",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000"
+]
+
+if "*" in custom_origins:
+    origins_config = "*"
+else:
+    # Build list of allowed origins, including custom origins, localhost, and Vercel domains
+    origins_config = list(dict.fromkeys(custom_origins + default_origins))
+    origins_config.append(re.compile(r"^https:\/\/.*\.vercel\.app$"))
+
+CORS(
+    app,
+    resources={r"/*": {"origins": origins_config}},
+    supports_credentials=True,
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+    methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+)
 
 @app.route("/", methods=["GET"])
 @app.route("/health", methods=["GET"])

@@ -25,6 +25,11 @@ export default defineConfig({
         target: 'http://127.0.0.1:5000',
         changeOrigin: true
       },
+      // Proxy general backend API to Flask
+      '/api': {
+        target: 'http://127.0.0.1:5000',
+        changeOrigin: true
+      },
       // Proxy chatbot static assets (style.css, etc.)
       '/static': {
         target: 'http://127.0.0.1:8080',

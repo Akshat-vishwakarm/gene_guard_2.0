@@ -76,17 +76,26 @@ export default function MedicalChatbotWidget({ isOpen, setIsOpen, onNavigateTab 
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: query })
         });
-      } catch {
-        // Fallback to relative /api/chat via Vite proxy
-        response = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: query })
-        });
+      } catch (networkErr) {
+        // Fallback to relative /api/chat only in local dev environment
+        if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+          response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: query })
+          });
+        } else {
+          throw networkErr;
+        }
       }
 
       if (!response || !response.ok) {
         throw new Error(`Server returned ${response ? response.status : 'error'}`);
+      }
+
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error(`Expected JSON response from chat API, received ${contentType}`);
       }
 
       const data = await response.json();
